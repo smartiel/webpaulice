@@ -16,9 +16,12 @@ import {
   PRESETS,
   numQubits,
   parseCoupling,
+  caterpillar,
+  gridLayout,
   type Coords,
 } from "./layout/couplingMaps.js";
 import { getCheckQubits } from "./layout/getCheckQubits.js";
+import { buildViewerLayout } from "./layout/viewerLayout.js";
 import type { RunRequest, WorkerResponse } from "./workerApi.js";
 
 const EXAMPLE_QASM = `OPENQASM 2.0;
@@ -357,6 +360,29 @@ async function copyQasm(): Promise<void> {
   setTimeout(() => (ok.textContent = ""), 2500);
 }
 
+/** Open the current variant in the 3D circuit viewer, passing circuit + layout
+ *  via the URL fragment. */
+function openIn3D(): void {
+  if (!state.result) return;
+  const v = state.result.variants[state.selectedVariant];
+  const qasm = toQasm(v.circuit);
+  const layout = buildViewerLayout(v, state.coords, suggestedAncillas());
+  // Tell the viewer which qubits host checks so it can color check gates purple
+  // and original gates dark green.
+  const checks = v.checkQubits.join(",");
+  const url =
+    "https://smartiel.github.io/3dcircuit/#qasm=" +
+    encodeURIComponent(qasm) +
+    "&layout=" +
+    encodeURIComponent(layout) +
+    "&checks=" +
+    encodeURIComponent(checks);
+  const win = window.open(url, "_blank", "noopener");
+  if (!win) {
+    setError("run-error", "Could not open the 3D viewer (popup blocked?).");
+  }
+}
+
 function downloadQasm(): void {
   if (!state.result) return;
   const v = state.result.variants[state.selectedVariant];
@@ -371,25 +397,52 @@ function downloadQasm(): void {
 
 // ---- Layout selection wiring ---------------------------------------------
 
+/** Show only the parameter block relevant to the selected layout kind. */
+function showLayoutParams(kind: "line" | "grid" | "custom" | "none"): void {
+  $("lp-line").classList.toggle("hidden", kind !== "line");
+  $("lp-grid").classList.toggle("hidden", kind !== "grid");
+  $("custom-coupling").classList.toggle("hidden", kind !== "custom");
+}
+
 function onLayoutChange(): void {
   const sel = $("layout-select") as HTMLSelectElement;
-  const custom = $("custom-coupling") as HTMLTextAreaElement;
   const desc = $("layout-desc");
-  if (sel.value === "custom") {
-    custom.classList.remove("hidden");
-    desc.textContent = "Enter one undirected edge per line (e.g. `0 1`).";
-    state.coords = null; // no fixed coordinates -> force-directed layout
-    try {
+  const v = sel.value;
+  try {
+    if (v === "line") {
+      showLayoutParams("line");
+      const n = Number(($("lp-line-n") as HTMLInputElement).value);
+      const cat = caterpillar(n);
+      state.coords = cat.coords;
+      state.couplingMap = cat.map;
+      desc.textContent =
+        `Caterpillar: a line of ${n} data qubit(s), each with one attached ` +
+        `ancilla (${2 * n} qubits total).`;
+    } else if (v === "grid") {
+      showLayoutParams("grid");
+      const rows = Number(($("lp-grid-rows") as HTMLInputElement).value);
+      const cols = Number(($("lp-grid-cols") as HTMLInputElement).value);
+      const g = gridLayout(rows, cols);
+      state.coords = g.coords;
+      state.couplingMap = g.map;
+      desc.textContent = `${rows}×${cols} square lattice (${rows * cols} qubits), nearest-neighbor.`;
+    } else if (v === "custom") {
+      showLayoutParams("custom");
+      state.coords = null; // no fixed coordinates -> force-directed layout
+      const custom = $("custom-coupling") as HTMLTextAreaElement;
       state.couplingMap = parseCoupling(custom.value || "0 1\n1 2\n2 3\n3 4");
-    } catch {
-      state.couplingMap = parseCoupling("0 1\n1 2\n2 3\n3 4");
+      desc.textContent = "Enter one undirected edge per line (e.g. `0 1`).";
+    } else {
+      showLayoutParams("none");
+      const preset = PRESETS.find((p) => p.id === v)!;
+      state.couplingMap = preset.map;
+      state.coords = preset.coords;
+      desc.textContent = preset.description;
     }
-  } else {
-    custom.classList.add("hidden");
-    const preset = PRESETS.find((p) => p.id === sel.value)!;
-    state.couplingMap = preset.map;
-    state.coords = preset.coords;
-    desc.textContent = preset.description;
+  } catch (e) {
+    // Invalid parameters (e.g. while typing); keep the previous map.
+    desc.textContent = e instanceof Error ? e.message : String(e);
+    return;
   }
   renderConnectivityGraph();
   renderAncillaInfo();
@@ -399,20 +452,23 @@ function onLayoutChange(): void {
 
 function init(): void {
   const sel = $("layout-select") as HTMLSelectElement;
-  for (const p of PRESETS) {
+  const addOption = (value: string, label: string) => {
     const opt = document.createElement("option");
-    opt.value = p.id;
-    opt.textContent = p.label;
+    opt.value = value;
+    opt.textContent = label;
     sel.appendChild(opt);
-  }
-  const customOpt = document.createElement("option");
-  customOpt.value = "custom";
-  customOpt.textContent = "Custom coupling map…";
-  sel.appendChild(customOpt);
+  };
+  for (const p of PRESETS) addOption(p.id, p.label);
+  addOption("line", "Line + ancillas (caterpillar)");
+  addOption("grid", "Grid");
+  addOption("custom", "Custom coupling map…");
   $("layout-desc").textContent = PRESETS[0].description;
 
   sel.addEventListener("change", onLayoutChange);
   $("custom-coupling").addEventListener("input", onLayoutChange);
+  for (const id of ["lp-line-n", "lp-grid-rows", "lp-grid-cols"]) {
+    $(id).addEventListener("input", onLayoutChange);
+  }
 
   $("btn-parse").addEventListener("click", parseCircuit);
   $("btn-example").addEventListener("click", () => {
@@ -449,6 +505,7 @@ function init(): void {
   $("btn-run").addEventListener("click", run);
   $("btn-copy").addEventListener("click", copyQasm);
   $("btn-download").addEventListener("click", downloadQasm);
+  $("btn-3d").addEventListener("click", openIn3D);
 }
 
 init();

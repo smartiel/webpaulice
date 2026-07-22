@@ -14,7 +14,17 @@ picker — entirely client-side.
    choose which data qubits host checks, set a uniform depolarizing rate
    (optional readout rate), and a seed.
 3. **Run & results** — the windowed search runs in a Web Worker; browse the
-   cost-vs-#checks variants, view the checked circuit, and download it as QASM.
+   cost-vs-#checks variants (with a Γ-vs-checks recap chart), view the checked
+   circuit, copy/download it as QASM, or **open it in the 3D circuit viewer**.
+
+### 3D viewer link
+
+The **Open in 3D viewer ↗** button deep-links the selected variant to
+[3dcircuit](https://smartiel.github.io/3dcircuit) by carrying the QASM and a
+layout file in the URL fragment (`#qasm=…&layout=…`, percent-encoded — the
+fragment never hits a server, so large circuits are fine). The layout places
+payload qubits at their device coordinates and each check ancilla next to its
+target. The viewer reads these on load (see its `#qasm=…&layout=…` hash hook).
 
 First release scope: `method="windowed"`, `cost="gamma"`, uniform depolarizing
 noise (+ optional readout). Serial (single-threaded) wasm — no special hosting

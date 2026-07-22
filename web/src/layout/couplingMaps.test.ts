@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { PRESETS, edgesFromCoords, numQubits } from "./couplingMaps.js";
+import {
+  PRESETS,
+  edgesFromCoords,
+  numQubits,
+  caterpillar,
+  gridLayout,
+} from "./couplingMaps.js";
+import { getCheckQubits } from "./getCheckQubits.js";
 
 describe("coupling map presets", () => {
   it("derives the exact IBM 27-qubit heavy-hex edges from coordinates", () => {
@@ -33,5 +40,48 @@ describe("coupling map presets", () => {
 
   it("edgesFromCoords links only grid neighbors", () => {
     expect(edgesFromCoords([[0, 0], [0, 1], [0, 3]])).toEqual([[0, 1]]);
+  });
+});
+
+describe("caterpillar", () => {
+  it("builds a spine of n data qubits each with one ancilla leg", () => {
+    const { coords, map } = caterpillar(4);
+    expect(coords.length).toBe(8); // 4 data + 4 ancilla
+    const key = (m: [number, number][]) =>
+      m.map(([a, b]) => (a < b ? `${a}-${b}` : `${b}-${a}`)).sort();
+    expect(key(map)).toEqual(
+      key([
+        [0, 1], [1, 2], [2, 3], // spine line
+        [0, 4], [1, 5], [2, 6], [3, 7], // data ↔ ancilla rungs
+      ]),
+    );
+    // Legs are not connected to each other.
+    expect(map.some(([a, b]) => a >= 4 && b >= 4)).toBe(false);
+  });
+
+  it("pairs each data qubit with its dedicated ancilla", () => {
+    const { map } = caterpillar(4);
+    // Data qubits are 0..3 (the payload/spine).
+    const { targetQubits, ancillaQubits } = getCheckQubits(map, [0, 1, 2, 3]);
+    expect(targetQubits).toEqual([0, 1, 2, 3]);
+    expect(ancillaQubits).toEqual([4, 5, 6, 7]);
+  });
+
+  it("rejects degenerate sizes", () => {
+    expect(() => caterpillar(0)).toThrow(/data qubit/);
+  });
+});
+
+describe("gridLayout", () => {
+  it("produces a rows×cols lattice", () => {
+    const { coords, map } = gridLayout(2, 3);
+    expect(coords.length).toBe(6);
+    expect(numQubits(map)).toBe(6);
+    // 2×3 grid: 7 edges (2 rows × 2 horiz + 3 cols × 1 vert = 4 + 3).
+    expect(map.length).toBe(7);
+  });
+
+  it("rejects degenerate dimensions", () => {
+    expect(() => gridLayout(0, 3)).toThrow(/positive/);
   });
 });

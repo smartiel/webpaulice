@@ -58,6 +58,19 @@
             <label class="field-label">Device layout</label>
             <select id="layout-select"></select>
             <p id="layout-desc" class="hint" style="margin: 8px 0 0"></p>
+            <div id="lp-line" class="controls layout-params hidden">
+              <label class="inline-field">data qubits
+                <input type="number" id="lp-line-n" value="8" min="1" max="80" step="1" />
+              </label>
+            </div>
+            <div id="lp-grid" class="controls layout-params hidden">
+              <label class="inline-field">rows
+                <input type="number" id="lp-grid-rows" value="4" min="1" max="20" step="1" />
+              </label>
+              <label class="inline-field">cols
+                <input type="number" id="lp-grid-cols" value="4" min="1" max="20" step="1" />
+              </label>
+            </div>
             <textarea id="custom-coupling" spellcheck="false" rows="5" class="hidden"
               placeholder="Custom coupling map, one edge per line: 0 1" style="margin-top: 10px"></textarea>
             <div id="connectivity" class="graph"></div>
@@ -125,6 +138,7 @@
           <div class="copy-row">
             <button id="btn-copy" class="secondary">Copy as OpenQASM 2.0</button>
             <button id="btn-download" class="secondary">Download QASM</button>
+            <button id="btn-3d" class="secondary">Open in 3D viewer ↗</button>
             <span id="copy-ok" class="ok"></span>
           </div>
           <pre id="output-qasm" class="qasm-block hidden"></pre>

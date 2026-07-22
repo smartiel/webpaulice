@@ -71,6 +71,26 @@ describe("pickChecks (wasm e2e)", () => {
     for (const v of result.variants) expect(Number.isFinite(v.cost)).toBe(true);
   });
 
+  it("does not crash the wasm deserializer on windows that exceed the support", () => {
+    // Regression: windowedIterator used to read past the support array (Python
+    // slicing clamps, the TS index loop did not), injecting `undefined` wires
+    // that made set_support throw "Reflect.get called on non-object". This
+    // (nq=4, depth=9, seed=6) case reproduced it reliably.
+    const circuit = parseQasm(
+      `OPENQASM 2.0;\ninclude "qelib1.inc";\nqreg q[4];\ncreg c[4];\n` +
+        Array.from({ length: 4 }, (_, q) => `h q[${q}];`).join("\n") +
+        "\n" +
+        // a few brick layers so windows are large enough to overrun
+        "cz q[0],q[1];\ncz q[2],q[3];\ns q[0];\nsx q[1];\ncz q[1],q[2];\ns q[2];\n" +
+        "cz q[0],q[1];\ncz q[2],q[3];\nsx q[0];\ns q[3];\ncz q[1],q[2];\n" +
+        Array.from({ length: 4 }, (_, q) => `measure q[${q}] -> c[${q}];`).join("\n"),
+    );
+    const noise: NoiseParam[] = [{ kind: "uniform_depolarizing", rate: 0.003 }];
+    for (let seed = 0; seed < 25; seed++) {
+      expect(() => pickChecks(circuit, [1, 2, 3], noise, { seed, ntries: 14 })).not.toThrow();
+    }
+  });
+
   it("is deterministic for a fixed seed", () => {
     const circuit = parseQasm(QASM);
     const noise: NoiseParam[] = [{ kind: "uniform_depolarizing", rate: 0.001 }];

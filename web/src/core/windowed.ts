@@ -46,7 +46,10 @@ function* windowedIterator(
       const startIndex = rng.randInt(previousEnd, high);
       const endIndex = startIndex + windowSize;
       previousEnd = endIndex;
-      for (let k = startIndex; k < endIndex; k++) actual.push(support[k]);
+      // Slice (clamped to bounds) rather than an index loop: mirrors Python's
+      // `support[start:end]`, so an endIndex past the end can't inject
+      // `undefined` entries (which would crash the wasm deserializer).
+      actual.push(...support.slice(startIndex, endIndex));
     }
     if (actual.length >= 3) {
       yield sortWires(actual);

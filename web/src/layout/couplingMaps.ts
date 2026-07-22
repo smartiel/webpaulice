@@ -45,14 +45,40 @@ export function edgesFromCoords(coords: Coords): CouplingMap {
   return edges;
 }
 
-function lineCoords(n: number): Coords {
-  return Array.from({ length: n }, (_, i) => [0, i] as [number, number]);
-}
-
-function gridCoords(rows: number, cols: number): Coords {
+/** Coordinates for a `rows × cols` grid (row-major, `[row, col]`). */
+export function gridCoords(rows: number, cols: number): Coords {
   const coords: Coords = [];
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) coords.push([r, c]);
   return coords;
+}
+
+/** A `rows × cols` grid layout (coordinates + coupling map). */
+export function gridLayout(rows: number, cols: number): { coords: Coords; map: CouplingMap } {
+  if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || cols < 1) {
+    throw new Error("Grid dimensions must be positive integers.");
+  }
+  return { coords: gridCoords(rows, cols), map: grid(rows, cols) };
+}
+
+/**
+ * A "caterpillar" layout: a line of `n` data qubits (the spine), each with one
+ * extra ancilla attached (a leg). Device qubits are ordered spine-first
+ * (indices `0..n-1`) then legs (`n..2n-1`), so leg `n+i` is the dedicated
+ * ancilla of data qubit `i`. Edges are the spine line plus each data↔ancilla
+ * rung; legs are NOT connected to each other (so this is built explicitly
+ * rather than via grid adjacency).
+ */
+export function caterpillar(n: number): { coords: Coords; map: CouplingMap } {
+  if (!Number.isInteger(n) || n < 1) {
+    throw new Error("Caterpillar needs at least 1 data qubit.");
+  }
+  const coords: Coords = [];
+  for (let i = 0; i < n; i++) coords.push([1, i]); // spine (data) 0..n-1
+  for (let i = 0; i < n; i++) coords.push([0, i]); // legs (ancilla) n..2n-1
+  const map: CouplingMap = [];
+  for (let i = 0; i < n - 1; i++) map.push([i, i + 1]); // spine line
+  for (let i = 0; i < n; i++) map.push([i, n + i]); // data ↔ ancilla rung
+  return { coords, map };
 }
 
 // qiskit canonical qubit_coordinates (row, col), verbatim.
@@ -134,8 +160,6 @@ export const PRESETS: Preset[] = [
     "Eagle heavy-hex (ibm_washington / sherbrooke / brisbane).",
     IBM_127_COORDS,
   ),
-  preset("line_10", "Line (10 qubits)", "Nearest-neighbor linear chain.", lineCoords(10)),
-  preset("grid_25", "Grid 5×5 (25 qubits)", "Square lattice, nearest-neighbor.", gridCoords(5, 5)),
 ];
 
 /**
