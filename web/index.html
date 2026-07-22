@@ -38,6 +38,19 @@
               <button id="btn-example" class="ghost">Load example</button>
               <button id="btn-parse" class="secondary">Parse circuit</button>
             </div>
+            <div class="controls gen-row">
+              <span class="hint">Random brickwork:</span>
+              <label class="inline-field">qubits
+                <input type="number" id="bw-qubits" value="6" min="2" max="60" step="1" />
+              </label>
+              <label class="inline-field">depth
+                <input type="number" id="bw-depth" value="8" min="1" max="200" step="1" />
+              </label>
+              <label class="inline-field">seed
+                <input type="number" id="bw-seed" placeholder="random" />
+              </label>
+              <button id="btn-brickwork" class="ghost">Generate</button>
+            </div>
             <div id="circuit-error" class="hidden"></div>
             <div id="circuit-summary"></div>
           </div>
@@ -102,7 +115,10 @@
         </div>
         <div id="run-error" class="hidden"></div>
         <div id="results" class="hidden">
-          <div id="variant-tabs" class="tabs"></div>
+          <label class="field-label">Γ (sampling overhead) vs. number of checks</label>
+          <div id="cost-recap" class="summary"></div>
+          <div id="cost-chart" class="diagram" style="display: inline-block"></div>
+          <div id="variant-tabs" class="tabs" style="margin-top: 16px"></div>
           <div id="variant-stats" class="stats"></div>
           <div id="variant-info" class="summary"></div>
           <div id="output-diagram" class="diagram"></div>

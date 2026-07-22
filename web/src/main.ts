@@ -8,8 +8,10 @@ import type {
 } from "./types.js";
 import { parseQasm } from "./qasm/parse.js";
 import { toQasm } from "./qasm/export.js";
+import { brickworkQasm } from "./qasm/generate.js";
 import { renderCircuitSvg } from "./ui/circuitSvg.js";
 import { renderConnectivity } from "./ui/connectivity.js";
+import { renderCostChart } from "./ui/costChart.js";
 import {
   PRESETS,
   numQubits,
@@ -289,6 +291,26 @@ function renderResults(): void {
   if (!result) return;
   $("results").classList.remove("hidden");
 
+  // Recap: Γ convergence across the whole run.
+  const costs = result.variants.map((v) => v.cost);
+  $("cost-chart").innerHTML = renderCostChart(costs, { selected: state.selectedVariant });
+  const c0 = costs[0];
+  const best = Math.min(...costs);
+  const bestK = costs.indexOf(best);
+  if (costs.length > 1 && Number.isFinite(c0) && c0 > 0) {
+    const factor = c0 / best;
+    const pct = (1 - best / c0) * 100;
+    $("cost-recap").innerHTML =
+      `Γ went from <strong>${c0.toPrecision(4)}</strong> (0 checks) to ` +
+      `<strong>${best.toPrecision(4)}</strong> (${bestK} check${bestK === 1 ? "" : "s"}) — ` +
+      `a <strong>${factor.toFixed(2)}×</strong> reduction (${pct.toFixed(1)}% lower). ` +
+      `Lower Γ means less post-selection sampling overhead.`;
+  } else {
+    $("cost-recap").innerHTML =
+      "No checks were committed, so Γ is unchanged. Try more targets, a higher " +
+      "noise rate, or more tries per target.";
+  }
+
   const tabs = $("variant-tabs");
   tabs.innerHTML = "";
   result.variants.forEach((v, k) => {
@@ -396,6 +418,19 @@ function init(): void {
   $("btn-example").addEventListener("click", () => {
     ($("qasm-input") as HTMLTextAreaElement).value = EXAMPLE_QASM;
     parseCircuit();
+  });
+  $("btn-brickwork").addEventListener("click", () => {
+    setError("circuit-error", "");
+    try {
+      const nq = Number(($("bw-qubits") as HTMLInputElement).value);
+      const depth = Number(($("bw-depth") as HTMLInputElement).value);
+      const seedStr = ($("bw-seed") as HTMLInputElement).value.trim();
+      const seed = seedStr === "" ? null : Number(seedStr);
+      ($("qasm-input") as HTMLTextAreaElement).value = brickworkQasm(nq, depth, seed);
+      parseCircuit();
+    } catch (e) {
+      setError("circuit-error", e instanceof Error ? e.message : String(e));
+    }
   });
   $("qasm-file").addEventListener("change", async (e) => {
     const file = (e.target as HTMLInputElement).files?.[0];
