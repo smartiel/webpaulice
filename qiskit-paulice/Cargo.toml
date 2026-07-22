@@ -1,0 +1,47 @@
+[package]
+name = "_internal-r"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "_internal_r"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["python"]
+# Native Python extension module (built by maturin). Pulls pyo3 and enables the
+# parallel (rayon) compute path.
+python = ["dep:pyo3", "parallel"]
+# Multi-threaded compute in coverage.rs via rayon. Enabled by `python`; left off
+# for the (single-threaded) wasm build.
+parallel = ["dep:rayon"]
+# Browser build: wasm-bindgen wrappers + serde marshaling. Serial compute.
+wasm = [
+    "dep:wasm-bindgen",
+    "dep:serde",
+    "dep:serde-wasm-bindgen",
+    "dep:console_error_panic_hook",
+    "dep:getrandom_02",
+    "dep:getrandom_03",
+]
+
+[dependencies]
+rustiq-core = "0.0.9"
+itertools = "0.13.0"
+rand = "0.9.2"
+rand_distr = "0.5.1"
+
+pyo3 = { version = "0.29", features = ["extension-module", "abi3-py310"], optional = true }
+rayon = { version = "1.11.0", optional = true }
+
+wasm-bindgen = { version = "0.2", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
+# getrandom appears twice in the tree: 0.3 via rand 0.9 (this crate) and 0.2 via
+# rand 0.8 (rustiq-core). Both need a browser RNG backend for wasm. 0.2 uses the
+# `js` feature; 0.3 additionally needs `--cfg getrandom_backend="wasm_js"` set at
+# build time (see build-wasm.sh). These renamed deps only exist to turn those
+# features on for the transitive crates -- they are never referenced in code.
+getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"], optional = true }
+getrandom_03 = { package = "getrandom", version = "0.3", features = ["wasm_js"], optional = true }

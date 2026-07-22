@@ -1,0 +1,18 @@
+# Rust
+qiskit-paulice/target/
+target/
+
+# Node / web
+web/node_modules/
+web/dist/
+
+# Generated wasm bundle (built by build-wasm.sh / CI)
+web/src/wasm/
+
+# Local Node toolchain
+.local/
+.tools/
+
+*.local
+.DS_Store
+*.log

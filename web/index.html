@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Paulice — Spacetime Pauli Checks in the browser</title>
+  </head>
+  <body>
+    <main class="app">
+      <header class="app-header">
+        <h1>Paulice Online</h1>
+        <p>
+          Browser-side spacetime Pauli check picking powered by
+          <a
+            href="https://github.com/Qiskit/qiskit-paulice"
+            target="_blank"
+            rel="noopener noreferrer"
+          ><code>qiskit-paulice</code></a>
+          (<a
+            href="https://arxiv.org/abs/2504.15725"
+            target="_blank"
+            rel="noopener noreferrer"
+          >arXiv:2504.15725</a>), a Rust crate compiled to WebAssembly. All check
+          picking runs client-side — nothing leaves your browser.
+        </p>
+      </header>
+
+      <!-- Step 1: circuit -->
+      <section id="step-circuit" class="card">
+        <h2><span class="num">1</span> Circuit &amp; layout</h2>
+        <div class="row">
+          <div class="col">
+            <label class="field-label">OpenQASM 2.0 circuit</label>
+            <textarea id="qasm-input" spellcheck="false" rows="12"
+              placeholder="Paste an OpenQASM 2.0 Clifford circuit…"></textarea>
+            <div class="controls">
+              <input type="file" id="qasm-file" accept=".qasm,.txt" />
+              <button id="btn-example" class="ghost">Load example</button>
+              <button id="btn-parse" class="secondary">Parse circuit</button>
+            </div>
+            <div id="circuit-error" class="hidden"></div>
+            <div id="circuit-summary"></div>
+          </div>
+          <div class="col">
+            <label class="field-label">Device layout</label>
+            <select id="layout-select"></select>
+            <p id="layout-desc" class="hint" style="margin: 8px 0 0"></p>
+            <textarea id="custom-coupling" spellcheck="false" rows="5" class="hidden"
+              placeholder="Custom coupling map, one edge per line: 0 1" style="margin-top: 10px"></textarea>
+            <div id="connectivity" class="graph"></div>
+          </div>
+        </div>
+        <div id="circuit-diagram" class="diagram"></div>
+      </section>
+
+      <!-- Step 2: targets + noise -->
+      <section id="step-config" class="card disabled">
+        <h2><span class="num">2</span> Data qubits &amp; noise</h2>
+        <div class="row">
+          <div class="col">
+            <label class="field-label">
+              Data qubits to host checks
+              <span class="hint">(click nodes above or toggle below)</span>
+            </label>
+            <div id="qubit-checkboxes" class="checkboxes"></div>
+            <div id="ancilla-info" class="summary"></div>
+            <label class="checkbox-line">
+              <input type="checkbox" id="use-stabilizers" />
+              Use input stabilizers (all-Z) instead of measured qubits
+            </label>
+            <span class="hint">Protects the |0…0⟩ input stabilizer group rather than
+              the measured-qubit logicals. Measurements become optional.</span>
+          </div>
+          <div class="col">
+            <label class="field-label">Noise model</label>
+            <div class="field">
+              <label>Depolarizing rate (per 2q gate)</label>
+              <input type="number" id="depol-rate" value="0.001" step="0.0001" min="0" />
+            </div>
+            <div class="field">
+              <label>Readout rate <span class="hint">(0 = off)</span></label>
+              <input type="number" id="readout-rate" value="0" step="0.001" min="0" />
+            </div>
+            <div class="field">
+              <label>Seed <span class="hint">(blank = random)</span></label>
+              <input type="number" id="seed" placeholder="e.g. 42" />
+            </div>
+            <div class="field">
+              <label>Tries per target</label>
+              <input type="number" id="ntries" value="30" step="1" min="2" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 3: run + results -->
+      <section id="step-run" class="card disabled">
+        <h2><span class="num">3</span> Run &amp; results</h2>
+        <div class="controls">
+          <button id="btn-run" class="primary">Pick checks</button>
+          <span id="run-status" class="status"></span>
+        </div>
+        <div id="run-error" class="hidden"></div>
+        <div id="results" class="hidden">
+          <div id="variant-tabs" class="tabs"></div>
+          <div id="variant-stats" class="stats"></div>
+          <div id="variant-info" class="summary"></div>
+          <div id="output-diagram" class="diagram"></div>
+          <div class="copy-row">
+            <button id="btn-copy" class="secondary">Copy as OpenQASM 2.0</button>
+            <button id="btn-download" class="secondary">Download QASM</button>
+            <span id="copy-ok" class="ok"></span>
+          </div>
+          <pre id="output-qasm" class="qasm-block hidden"></pre>
+        </div>
+      </section>
+
+      <footer class="app-footer">
+        <p>
+          Built on
+          <a href="https://github.com/Qiskit/qiskit-paulice" target="_blank" rel="noopener noreferrer">Qiskit Paulice</a>
+          — the spacetime Pauli check addon — compiled to WebAssembly. Windowed
+          search + gamma cost + uniform depolarizing noise. Runs entirely
+          client-side; nothing leaves your browser.
+        </p>
+        <p class="cite">
+          Method: S. Martiel and A. Javadi-Abhari,
+          <a href="https://arxiv.org/abs/2504.15725" target="_blank" rel="noopener noreferrer">“Low-overhead
+          error detection with spacetime codes,”</a> arXiv:2504.15725 [quant-ph].
+          Not affiliated with or endorsed by IBM / Qiskit.
+        </p>
+      </footer>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
