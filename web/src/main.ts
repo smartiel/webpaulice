@@ -1,6 +1,7 @@
 import "./style.css";
 
 import type {
+  CheckedVariant,
   Circuit,
   CouplingMap,
   NoiseParam,
@@ -23,6 +24,8 @@ import {
 import { getCheckQubits } from "./layout/getCheckQubits.js";
 import { buildViewerLayout } from "./layout/viewerLayout.js";
 import type { RunRequest, WorkerResponse } from "./workerApi.js";
+import { encodeState, decodeState, type AppSnapshot } from "./urlState.js";
+import { toQiskitCode } from "./qiskitExport.js";
 
 const EXAMPLE_QASM = `OPENQASM 2.0;
 include "qelib1.inc";
@@ -214,6 +217,7 @@ function parseCircuit(): void {
 function runInWorker(
   req: RunRequest,
   onProgress: (p: { index: number; total: number; target: number }) => void,
+  onCommit: (c: { k: number; target: number | null; cost: number }) => void,
 ): Promise<PickResult> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./worker.ts", import.meta.url), {
@@ -222,10 +226,11 @@ function runInWorker(
     worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
       const m = e.data;
       if (m.type === "progress") onProgress(m);
+      else if (m.type === "commit") onCommit(m);
       else if (m.type === "result") {
         resolve(m.result);
         worker.terminate();
-      } else {
+      } else if (m.type === "error") {
         reject(new Error(m.message));
         worker.terminate();
       }
@@ -269,16 +274,39 @@ async function run(): Promise<void> {
     options: { seed, ntries, useStabilizers },
   };
 
+  // Reveal the results panel and reset it for the live view.
+  state.result = null;
+  $("results").classList.remove("hidden");
+  for (const id of ["variant-tabs", "variant-stats", "variant-info", "output-diagram", "cost-chart"]) {
+    $(id).innerHTML = "";
+  }
+  $("output-qasm").classList.add("hidden");
+  const liveCosts: number[] = [];
+
   btn.disabled = true;
   status.textContent = "Initializing…";
   try {
-    const result = await runInWorker(req, (p) => {
-      status.textContent = `Optimizing check ${p.index + 1}/${p.total} (qubit ${p.target})…`;
-    });
+    const result = await runInWorker(
+      req,
+      (p) => {
+        status.textContent = `Optimizing check ${p.index + 1}/${p.total} (qubit ${p.target})…`;
+      },
+      (c) => {
+        // Grow the Γ chart live as each check commits.
+        liveCosts.push(c.cost);
+        $("cost-chart").innerHTML = renderCostChart(liveCosts, {
+          selected: liveCosts.length - 1,
+        });
+        $("cost-recap").innerHTML =
+          c.k === 0
+            ? "Baseline Γ measured — searching for checks…"
+            : `Committed <strong>${c.k}</strong> check(s), Γ = <strong>${c.cost.toPrecision(4)}</strong>…`;
+      },
+    );
     state.result = result;
     state.selectedVariant = result.variants.length - 1;
     status.textContent = `Done — committed ${result.committedTargets.length} check(s).`;
-    renderResults();
+    renderResults(true);
   } catch (e) {
     setError("run-error", e instanceof Error ? e.message : String(e));
     status.textContent = "";
@@ -289,14 +317,17 @@ async function run(): Promise<void> {
 
 // ---- Results --------------------------------------------------------------
 
-function renderResults(): void {
+function renderResults(animateChart = false): void {
   const result = state.result;
   if (!result) return;
   $("results").classList.remove("hidden");
 
   // Recap: Γ convergence across the whole run.
   const costs = result.variants.map((v) => v.cost);
-  $("cost-chart").innerHTML = renderCostChart(costs, { selected: state.selectedVariant });
+  $("cost-chart").innerHTML = renderCostChart(costs, {
+    selected: state.selectedVariant,
+    animate: animateChart,
+  });
   const c0 = costs[0];
   const best = Math.min(...costs);
   const bestK = costs.indexOf(best);
@@ -335,16 +366,21 @@ function renderResults(): void {
     ? `Ancillas: <strong>${v.checkQubits.join(", ")}</strong>; targets: <strong>${v.targetQubits.join(", ")}</strong>.`
     : "Bare circuit (no checks).";
 
-  $("output-diagram").innerHTML = renderCircuitSvg(v.circuit, {
-    checkQubits: v.checkQubits,
-    targetQubits: v.targetQubits,
-  });
+  renderOutputDiagram(v);
 
   const qasm = toQasm(v.circuit);
   const block = $("output-qasm");
   block.textContent = qasm;
   block.classList.remove("hidden");
   $("copy-ok").textContent = "";
+}
+
+/** Render the output circuit diagram for a variant. */
+function renderOutputDiagram(v: CheckedVariant): void {
+  $("output-diagram").innerHTML = renderCircuitSvg(v.circuit, {
+    checkQubits: v.checkQubits,
+    targetQubits: v.targetQubits,
+  });
 }
 
 async function copyQasm(): Promise<void> {
@@ -448,6 +484,103 @@ function onLayoutChange(): void {
   renderAncillaInfo();
 }
 
+// ---- Shareable permalinks -------------------------------------------------
+
+function captureState(): AppSnapshot {
+  const val = (id: string) => ($(id) as HTMLInputElement).value;
+  return {
+    qasm: ($("qasm-input") as HTMLTextAreaElement).value,
+    layout: ($("layout-select") as HTMLSelectElement).value,
+    lineN: Number(val("lp-line-n")),
+    gridRows: Number(val("lp-grid-rows")),
+    gridCols: Number(val("lp-grid-cols")),
+    custom: ($("custom-coupling") as HTMLTextAreaElement).value,
+    targets: [...state.selectedTargets].sort((a, b) => a - b),
+    depol: Number(val("depol-rate")),
+    readout: Number(val("readout-rate")),
+    seed: val("seed"),
+    ntries: Number(val("ntries")),
+    useStabilizers: ($("use-stabilizers") as HTMLInputElement).checked,
+  };
+}
+
+function restoreState(s: AppSnapshot): void {
+  const setVal = (id: string, v: string | number) => {
+    ($(id) as HTMLInputElement).value = String(v);
+  };
+  ($("qasm-input") as HTMLTextAreaElement).value = s.qasm ?? "";
+  ($("layout-select") as HTMLSelectElement).value = s.layout ?? PRESETS[0].id;
+  if (s.lineN != null) setVal("lp-line-n", s.lineN);
+  if (s.gridRows != null) setVal("lp-grid-rows", s.gridRows);
+  if (s.gridCols != null) setVal("lp-grid-cols", s.gridCols);
+  if (s.custom != null) ($("custom-coupling") as HTMLTextAreaElement).value = s.custom;
+  setVal("depol-rate", s.depol ?? 0.001);
+  setVal("readout-rate", s.readout ?? 0);
+  ($("seed") as HTMLInputElement).value = s.seed ?? "";
+  setVal("ntries", s.ntries ?? 30);
+  ($("use-stabilizers") as HTMLInputElement).checked = !!s.useStabilizers;
+
+  onLayoutChange();
+  if (s.qasm && s.qasm.trim()) {
+    parseCircuit();
+    if (state.circuit) {
+      const n = state.circuit.nqubits;
+      state.selectedTargets = new Set((s.targets ?? []).filter((t) => t >= 0 && t < n));
+      renderCheckboxes();
+      renderConnectivityGraph();
+      renderAncillaInfo();
+      updateRunEnabled();
+    }
+  }
+}
+
+function copyQiskit(): void {
+  const qasm = ($("qasm-input") as HTMLTextAreaElement).value.trim();
+  if (!qasm) {
+    setError("run-error", "Parse a circuit first to export Qiskit code.");
+    return;
+  }
+  const num = (id: string) => Number(($(id) as HTMLInputElement).value);
+  const seedStr = ($("seed") as HTMLInputElement).value.trim();
+  const code = toQiskitCode({
+    qasm,
+    edges: state.couplingMap,
+    targets: [...state.selectedTargets].sort((a, b) => a - b),
+    depol: num("depol-rate"),
+    readout: num("readout-rate"),
+    seed: seedStr === "" ? null : Number(seedStr),
+    ntries: num("ntries") || 30,
+    useStabilizers: ($("use-stabilizers") as HTMLInputElement).checked,
+  });
+  const block = $("qiskit-code");
+  block.textContent = code;
+  block.classList.remove("hidden");
+  const ok = $("link-ok");
+  navigator.clipboard.writeText(code).then(
+    () => {
+      ok.textContent = "✓ Qiskit code copied";
+      setTimeout(() => (ok.textContent = ""), 2500);
+    },
+    () => {
+      ok.textContent = "Shown below (clipboard blocked)";
+      setTimeout(() => (ok.textContent = ""), 2500);
+    },
+  );
+}
+
+async function copyLink(): Promise<void> {
+  const url = location.origin + location.pathname + "#s=" + encodeState(captureState());
+  const ok = $("link-ok");
+  try {
+    history.replaceState(null, "", url); // reflect in the address bar
+    await navigator.clipboard.writeText(url);
+    ok.textContent = "✓ Link copied";
+  } catch {
+    ok.textContent = "Copy failed — link is in the address bar";
+  }
+  setTimeout(() => (ok.textContent = ""), 2500);
+}
+
 // ---- Init -----------------------------------------------------------------
 
 function init(): void {
@@ -503,9 +636,15 @@ function init(): void {
   });
 
   $("btn-run").addEventListener("click", run);
+  $("btn-link").addEventListener("click", copyLink);
+  $("btn-qiskit").addEventListener("click", copyQiskit);
   $("btn-copy").addEventListener("click", copyQasm);
   $("btn-download").addEventListener("click", downloadQasm);
   $("btn-3d").addEventListener("click", openIn3D);
+
+  // Restore a shared configuration from the URL, if one is present.
+  const snapshot = decodeState(location.hash);
+  if (snapshot) restoreState(snapshot);
 }
 
 init();

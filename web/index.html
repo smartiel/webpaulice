@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <title>Paulice — Spacetime Pauli Checks in the browser</title>
   </head>
   <body>
@@ -124,13 +125,17 @@
         <h2><span class="num">3</span> Run &amp; results</h2>
         <div class="controls">
           <button id="btn-run" class="primary">Pick checks</button>
+          <button id="btn-link" class="secondary">Copy shareable link</button>
+          <button id="btn-qiskit" class="secondary">Copy as Qiskit</button>
+          <span id="link-ok" class="ok"></span>
           <span id="run-status" class="status"></span>
         </div>
+        <pre id="qiskit-code" class="qasm-block hidden"></pre>
         <div id="run-error" class="hidden"></div>
         <div id="results" class="hidden">
           <label class="field-label">Γ (sampling overhead) vs. number of checks</label>
           <div id="cost-recap" class="summary"></div>
-          <div id="cost-chart" class="diagram" style="display: inline-block"></div>
+          <div id="cost-chart" class="diagram"></div>
           <div id="variant-tabs" class="tabs" style="margin-top: 16px"></div>
           <div id="variant-stats" class="stats"></div>
           <div id="variant-info" class="summary"></div>

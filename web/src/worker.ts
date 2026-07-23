@@ -28,6 +28,7 @@ self.onmessage = async (e: MessageEvent<RunRequest>) => {
       msg.noise,
       msg.options,
       (p) => post({ type: "progress", ...p }),
+      (c) => post({ type: "commit", ...c }),
     );
     post({ type: "result", result });
   } catch (err) {

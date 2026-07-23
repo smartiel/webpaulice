@@ -15,6 +15,13 @@ export type ProgressFn = (p: {
   target: number;
 }) => void;
 
+/** Fired for the baseline (k=0) and after each committed check. */
+export type CommitFn = (e: {
+  k: number;
+  target: number | null;
+  cost: number;
+}) => void;
+
 function sortWires(wires: Wire[]): Wire[] {
   return [...wires].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
 }
@@ -104,6 +111,7 @@ export function windowedCheckPicker(
   targets: number[],
   options: WindowedOptions = {},
   onProgress?: ProgressFn,
+  onCommit?: CommitFn,
 ): WindowedResult {
   const { ntries = 30, maxWidth = 0.3, paulis = null, seed = null } = options;
   const rng = new Rng(seed);
@@ -112,6 +120,7 @@ export function windowedCheckPicker(
   const circuits: Circuit[] = [station.getCircuit()];
   const costs: number[] = [station.getCurrentEnergy()];
   const committedTargets: number[] = [];
+  onCommit?.({ k: 0, target: null, cost: costs[0] }); // baseline
 
   for (let idx = 0; idx < targets.length; idx++) {
     const target = targets[idx];
@@ -132,6 +141,7 @@ export function windowedCheckPicker(
     committedTargets.push(target);
     circuits.push(station.getCircuit());
     costs.push(station.getCurrentEnergy());
+    onCommit?.({ k: committedTargets.length, target, cost: costs[costs.length - 1] });
   }
 
   const { checkQubits, virtualZs } = station.getCheckData();

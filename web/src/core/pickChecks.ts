@@ -15,7 +15,7 @@ import type {
   PickResult,
 } from "../types.js";
 import { Station } from "./station.js";
-import { windowedCheckPicker, type ProgressFn } from "./windowed.js";
+import { windowedCheckPicker, type ProgressFn, type CommitFn } from "./windowed.js";
 
 const CHECK_CREG = "checks_c";
 
@@ -25,6 +25,7 @@ export function pickChecks(
   noise: NoiseParam[],
   options: PickOptions = {},
   onProgress?: ProgressFn,
+  onCommit?: CommitFn,
 ): PickResult {
   const nPayload = circuit.nqubits;
   const useStabilizers = options.useStabilizers ?? false;
@@ -70,7 +71,7 @@ export function pickChecks(
     pickerMeasured,
     stabilizers,
   );
-  const res = windowedCheckPicker(station, targets, options, onProgress);
+  const res = windowedCheckPicker(station, targets, options, onProgress, onCommit);
 
   const committed = res.committedTargets;
   const m = committed.length;

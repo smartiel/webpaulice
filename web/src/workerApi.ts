@@ -12,5 +12,6 @@ export interface RunRequest {
 
 export type WorkerResponse =
   | { type: "progress"; index: number; total: number; target: number }
+  | { type: "commit"; k: number; target: number | null; cost: number }
   | { type: "result"; result: PickResult }
   | { type: "error"; message: string };

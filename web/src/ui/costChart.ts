@@ -25,6 +25,8 @@ function fmt(v: number): string {
 export interface CostChartOptions {
   /** Index of the currently-selected variant to highlight. */
   selected?: number;
+  /** Animate the line drawing itself + points popping in (final render). */
+  animate?: boolean;
 }
 
 /**
@@ -34,7 +36,12 @@ export interface CostChartOptions {
 export function renderCostChart(costs: number[], options: CostChartOptions = {}): string {
   const n = costs.length;
   const selected = options.selected ?? -1;
-  const W = Math.max(340, PAD_L + PAD_R + Math.max(1, n - 1) * 72);
+  // Compress point spacing when there are many checks so the chart stays close
+  // to the card width (it still scrolls horizontally past a floor). The
+  // enclosing `.diagram` div is a block with overflow:auto, so it never grows
+  // beyond its container regardless.
+  const spacing = n <= 12 ? 72 : Math.max(34, Math.round(864 / (n - 1)));
+  const W = Math.max(340, PAD_L + PAD_R + Math.max(1, n - 1) * spacing);
 
   let min = Math.min(...costs);
   let max = Math.max(...costs);
@@ -66,18 +73,39 @@ export function renderCostChart(costs: number[], options: CostChartOptions = {})
     `<text x="14" y="${PAD_T - 12}" font-size="11" fill="${C_TEXT}">Γ</text>`,
   );
 
-  // Line.
-  const pathD = costs.map((v, i) => `${i === 0 ? "M" : "L"}${xOf(i)},${yOf(v)}`).join(" ");
-  parts.push(`<path d="${pathD}" fill="none" stroke="${C_LINE}" stroke-width="2"/>`);
+  const animate = options.animate ?? false;
+
+  // Line (optionally self-drawing via stroke-dashoffset).
+  const pts = costs.map((v, i) => [xOf(i), yOf(v)] as [number, number]);
+  const pathD = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x},${y}`).join(" ");
+  let pathLen = 0;
+  for (let i = 1; i < pts.length; i++) {
+    pathLen += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  }
+  if (animate && pathLen > 0) {
+    parts.push(
+      `<path d="${pathD}" fill="none" stroke="${C_LINE}" stroke-width="2" ` +
+        `stroke-dasharray="${pathLen}" stroke-dashoffset="${pathLen}">` +
+        `<animate attributeName="stroke-dashoffset" from="${pathLen}" to="0" dur="0.7s" ` +
+        `fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="0.4 0 0.2 1"/></path>`,
+    );
+  } else {
+    parts.push(`<path d="${pathD}" fill="none" stroke="${C_LINE}" stroke-width="2"/>`);
+  }
 
   // Points + x labels.
   for (let i = 0; i < n; i++) {
     const x = xOf(i);
     const y = yOf(costs[i]);
     const isSel = i === selected;
+    const r = isSel ? 5.5 : 3.5;
+    const pop = animate
+      ? `<animate attributeName="r" from="0" to="${r}" begin="${(0.7 * i) / Math.max(1, n - 1)}s" ` +
+        `dur="0.25s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="0.34 1.56 0.64 1"/>`
+      : "";
     parts.push(
-      `<circle cx="${x}" cy="${y}" r="${isSel ? 5.5 : 3.5}" fill="${isSel ? C_SELECT : C_POINT}" ` +
-        `stroke="${isSel ? C_SELECT : "none"}" stroke-width="2" fill-opacity="${isSel ? 1 : 0.9}"/>`,
+      `<circle cx="${x}" cy="${y}" r="${animate ? 0 : r}" fill="${isSel ? C_SELECT : C_POINT}" ` +
+        `stroke="${isSel ? C_SELECT : "none"}" stroke-width="2" fill-opacity="${isSel ? 1 : 0.9}">${pop}</circle>`,
       `<text x="${x}" y="${H - PAD_B + 16}" text-anchor="middle" font-size="10" ` +
         `fill="${isSel ? C_SELECT : C_MUTED}">${i}</text>`,
     );
